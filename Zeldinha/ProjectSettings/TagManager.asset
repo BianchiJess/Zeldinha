@@ -5,15 +5,16 @@ TagManager:
   serializedVersion: 3
   tags:
   - CamTrigger
+  - Enemy
   layers:
   - Default
   - TransparentFX
   - Ignore Raycast
-  - HitLayer
+  - 
   - Water
   - UI
-  - 
-  - 
+  - HitLayer
+  - EnemyLayer
   - 
   - 
   - 

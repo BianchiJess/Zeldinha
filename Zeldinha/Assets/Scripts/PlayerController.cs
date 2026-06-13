@@ -1,10 +1,12 @@
-using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 
 [RequireComponent(typeof(CharacterController))]
 public class PlayerController : MonoBehaviour
 {
+
+    public SlimeIA slime;
 
     [Header("Movimento")]
     [SerializeField] private float walkSpeed = 3f;
@@ -14,30 +16,48 @@ public class PlayerController : MonoBehaviour
     [Header("Gravidade")]
     [SerializeField] private float gravity = -9.81f;
 
-    [Header("CÃ¢meras")]
+    [Header("Câmeras")]
     [SerializeField] private GameObject camNormal;
     [SerializeField] private GameObject camTop;
 
     [Header("Attack")]
-    [SerializeField] private ParticleSystem fxAttack;
-    [SerializeField] private bool isAttacking = false;
+    [SerializeField] private ParticleSystem fxAtack;
+    [SerializeField] private bool isAtacking = false;
 
     [Range(0.2f, 1f)]
     public float hitRange = 0.5f;
     public Transform hitBox;
-    Collider[] hitEnemies;
-    LayerMask hitMask;
+    public Collider[] hitEnemies;
+    public LayerMask hitMask;
     public int attackDamage = 10;
 
-    // NÃ£o aparecem no inspector
+    //Não aparecem no inspector
     private CharacterController characterController;
     private Animator anim;
     private Vector3 velocity;
     private Vector2 moveInput;
     private bool isRunning;
 
+    //Para receber dano/ter vida
+    [Header("Player Stats")]
+    public int maxHp = 100;
+    public int currentHp;
+    public bool isDead = false;
+
+    public bool isDead2 = false;
+
+    [SerializeField] public GameObject gameOverUI; //Tela de GameOver
+
+    [SerializeField] private GameManager gameManager; //Para parar os personagens
+
+
     private void Start()
     {
+        currentHp = maxHp;
+        isDead = false;
+
+        gameOverUI.SetActive(false);
+
         isRunning = false;
 
         characterController = GetComponent<CharacterController>();
@@ -47,13 +67,20 @@ public class PlayerController : MonoBehaviour
 
     private void Update()
     {
+        if (isDead) {
+            if (!isDead2)
+            {
+                Die();
+            }
+        return;
+    }
+
         MovimentacaoPlayer();
     }
 
     public void OnMove(InputValue value)
     {
         moveInput = value.Get<Vector2>();
-
     }
 
     public void OnAttack(InputValue value)
@@ -73,26 +100,30 @@ public class PlayerController : MonoBehaviour
 
         isRunning = Keyboard.current.leftShiftKey.isPressed;
 
+
+
         if (isMoving)
         {
             float targetAngle = Mathf.Atan2(direction.x, direction.z) * Mathf.Rad2Deg;
             Quaternion targetRotation = Quaternion.Euler(0, targetAngle, 0);
 
-            transform.rotation = Quaternion.Lerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
+            transform.rotation =
+                Quaternion.Lerp(transform.rotation,
+                targetRotation, rotationSpeed * Time.deltaTime);
 
             characterController.Move(direction.normalized * speed * Time.deltaTime);
 
         }
-        //Aplicar a gravidade
         AplicarGravidade();
         AtualizarAnimacao(isMoving);
+
     }
 
     private void AplicarGravidade()
     {
         if (characterController.isGrounded && velocity.y < 0)
         {
-            velocity.y = -2f; //Pequena forÃ§a para manter o personagem no chÃ£o
+            velocity.y = -2f; // Pequena força para manter o personagem no chão
         }
         velocity.y += gravity * Time.deltaTime;
         characterController.Move(velocity * Time.deltaTime);
@@ -101,29 +132,31 @@ public class PlayerController : MonoBehaviour
     private void AtualizarAnimacao(bool estaMovendo)
     {
         float targetSpeed = 0f;
+
         if (estaMovendo)
         {
             targetSpeed = isRunning ? 1f : 0.5f;
         }
-
-        float smoothSpeed = Mathf.Lerp(anim.GetFloat("Speed"), targetSpeed, Time.deltaTime * 10f);
+        float smoothSpeed =
+            Mathf.Lerp(anim.GetFloat("Speed"),
+            targetSpeed, Time.deltaTime * 10f);
 
         anim.SetFloat("Speed", smoothSpeed);
 
     }
 
-    private void OnTriggerEnter(Collider others)
+    private void OnTriggerEnter(Collider other)
     {
-        if (others.CompareTag("CamTrigger"))
+        if (other.CompareTag("CamTrigger"))
         {
             camNormal.SetActive(false);
             camTop.SetActive(true);
         }
     }
 
-    private void OnTriggerExit(Collider others)
+    private void OnTriggerExit(Collider other)
     {
-        if (others.CompareTag("CamTrigger"))
+        if (other.CompareTag("CamTrigger"))
         {
             camNormal.SetActive(true);
             camTop.SetActive(false);
@@ -132,21 +165,24 @@ public class PlayerController : MonoBehaviour
 
     private void AtaquePlayer()
     {
-        if (isAttacking) return; //evita ataques consecutivos
+        if (isAtacking) return; // Evita ataques consecutivos
         anim.SetTrigger("Attack");
-        fxAttack.Emit(1);
-        isAttacking = true;
+        fxAtack.Emit(1);
+        isAtacking = true;
 
-        hitEnemies = Physics.OverlapSphere(hitBox.position, hitRange, hitMask);
+        hitEnemies = Physics.OverlapSphere
+            (hitBox.position, hitRange, hitMask);
 
         foreach (Collider enemy in hitEnemies)
         {
-            enemy.gameObject.SendMessage("GetHit", attackDamage, SendMessageOptions.DontRequireReceiver);
+            enemy.gameObject.SendMessage(
+                "GetHit", attackDamage, SendMessageOptions.DontRequireReceiver);
         }
     }
+
     public void AtackIsDone()
     {
-        isAttacking = false;
+        isAtacking = false;
     }
 
     private void OnDrawGizmosSelected()
@@ -154,7 +190,47 @@ public class PlayerController : MonoBehaviour
         if (hitBox == null) return;
 
         Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(hitBox.position, hitRange);
-    
+        Gizmos.DrawWireSphere
+            (hitBox.position, hitRange);
+    }
+
+    public void GetHit(int damage)
+    {
+        if (isDead) return;
+
+        currentHp -= damage;
+
+        Debug.Log("Player recebeu dano! HP: " + currentHp);
+
+        anim.SetTrigger("GetHit");
+
+        if (currentHp <= 0)
+        {
+            Die();
+        }
+    }
+
+    private void Die()
+    {
+        
+        isDead = true;
+
+        slime.StopEnemy();
+  
+
+
+        anim.SetTrigger("Die");
+        isDead2 = true;
+
+        characterController.enabled = false;
+        gameOverUI.SetActive(true);
+        gameManager.isGameOver = true;
+        this.enabled = false;
+    }
+
+    public void RestartGame()
+    {
+        Time.timeScale = 1f;
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 }
